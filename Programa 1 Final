@@ -1,0 +1,764 @@
+;######################## SEGMENTO DE MACROS ###########################
+;Las macros, son funciones que reciben parametros de entrada y ejecutan
+;acciones sobre esos parametros.
+;Se debe indicar el numero de parametros de entrada y ejecutar las
+;operaciones en la macro. Luego, se puede llamar la macro desde el
+;programa principal
+
+;Ejemplos de Macros:
+
+;-------------------------  MACRO #1  ----------------------------------
+;Macro-1: impr_texto.
+;	Imprime un mensaje que se pasa como parametro
+;	Recibe 2 parametros de entrada:
+;		%1 es la direccion del texto a imprimir
+;		%2 es la cantidad de bytes a imprimir
+;-----------------------------------------------------------------------
+%macro impr_texto 2 	;recibe 2 parametros
+	mov rax,1	;sys_write
+	mov rdi,1	;std_out
+	mov rsi,%1	;primer parametro: Texto
+	mov rdx,%2	;segundo parametro: Tamano texto
+	syscall
+%endmacro
+;------------------------- FIN DE MACRO --------------------------------
+
+;-------------------------  MACRO #2  ----------------------------------
+;Macro-2: impr_linea.
+;	Imprime un mensaje que se pasa como parametro y un salto de linea
+;	Recibe 2 parametros de entrada:
+;		%1 es la direccion del texto a imprimir
+;		%2 es la cantidad de bytes a imprimir
+;-----------------------------------------------------------------------
+%macro impr_linea 2 	;recibe 2 parametros
+	mov rax,1	;sys_write
+	mov rdi,1	;std_out
+	mov rsi,%1	;primer parametro: Texto
+	mov rdx,%2	;segundo parametro: Tamano texto
+	syscall
+  	mov rax,1	;sys_write
+	mov rdi,1	;std_out
+	mov rsi,cons_nueva_linea	;primer parametro: Texto
+	mov rdx,1	;segundo parametro: Tamano texto
+	syscall
+%endmacro
+;------------------------- FIN DE MACRO --------------------------------
+
+;-------------------------   MACRO #3   --------------------------------	
+;Macro IMPRIMIR HEXA
+;----------------------------------------------------------------------	
+%macro impr_hexa 1 ;recibe 1 parametro	
+	mov rdx,%1
+	lea ebx,[tab]	
+	mov al,dl	
+	xlat	
+	mov [byte_uno],ax
+	impr_texto byte_uno,1
+%endmacro
+;-----------------------  FIN DE MACRO  --------------------------------	
+
+
+;===================================================================================
+;Segmento de datos
+;Declaracion de variables estaticas (ubicadas en memoria)
+;section .bss
+section .data
+	cons_nueva_linea: db 0xa
+  	tabla: db "0123456789ABCDEF",0
+  	cons_hex_header: db ' 0x'
+  	cons_tam_hex_header: equ $-cons_hex_header
+  	cons_fabricante: db 'Fabricante: '
+  	cons_tam_fabricante: equ $-cons_fabricante
+	cons_stepping: db 'Stepping - Numero revision: '
+	cons_tam_stepping: equ $-cons_stepping
+  	cons_familia: db 'Familia: '
+  	cons_modelo: db 'Modelo: '
+  	cons_tam_modelo: equ $-cons_modelo
+	cons_tam_familia: equ $-cons_familia
+  	cons_tipo_cpu: db 'Tipo de procesador: '
+	cons_tam_tipo_cpu: equ $-cons_tipo_cpu
+  	cons_modelo_ext: db 'Modelo extendido: '
+	cons_tam_modelo_ext: equ $-cons_modelo_ext
+
+  	cons_tamtotal db 'Tamano total de la RAM: 0x'
+  	cons_tam_ram: equ $-cons_tamtotal
+	cons_ramdisponible db 'Memoria RAM disponible: 0x'
+	cons_tam_disponible: equ $-cons_ramdisponible
+
+	cons_numnucleos db 'Numero de Nucleos: '
+	cons_tam_numnucleos: equ $-cons_numnucleos
+	cons_numthreads db 'Numero de Threads: 0x'
+	cons_tam_numthreads: equ $-cons_numthreads
+
+	cons_discoduro db 'Tamano total disco duro en GB: 0x'
+	cons_tam_discoduro: equ $-cons_discoduro
+	nombre_archivo: db '/sys/block/sda/size',0
+	cons_nombres_archivo: equ $-nombre_archivo
+	cons_frecuencia db 'Frecuencia del procesador:'
+	cons_tam_frecuencia: equ $-cons_frecuencia
+
+	cons_cache: db 'Memoria Cache: ',0xa ;Texto cache
+	cons_num_cache: equ $-cons_cache     ;Tamano texto cache
+	cons_esp: db 0xa
+	dcache: db 'D'
+	dospuntos: db ': '
+	tab: db "0123456789ABCDEF",0
+	
+
+
+	cons_banner: db 'Bienvenido usuario al programa de información de su microprocesador, de su memoria RAM, del número de núcleos y de la cache. Las opciones son: 1) Obtener información acerca de su microprocesador en sí. 2) Obtener información sobre la RAM de sus sitema. 3) Número de núcleos. 4) Obtener información de la cache. 5) Obtener el tamaño total de disco duro. 6) Obtener la frecuencia del procesador. 7)Salir del prorama. Presione la tecla con el número correspondiente a su petición, y luego Enter:  '		; Banner para el usuario
+	cons_tamano_banner: equ $-cons_banner		; Longitud del banner
+	cons_salida: db 'Usted presiono la tecla:  '	; Banner para el usuario
+	cons_tamano_salida: equ $-cons_salida		; Longitud del banner
+	cons_final: db 0xa,'Fin del programa. ',0xa	; Banner para el usuario
+	cons_tamano_final: equ $-cons_final		; Longitud del banner
+
+	variable: db''				;Almacenamiento de la tecla capturada
+
+
+section .bss
+  fabricante_id:       resd	12	 ;Identificacion del fabricante (vendor) [12 Double]
+;  version:		resd	4            ;Version
+  ;features:	resd	4              ;Features o funcionalidades
+	;stepping: resb 1
+  un_byte: resb 1
+;  i		resd	4
+;  curfeat		resd	4
+
+	resultado: resb 64
+	dos_byte: resb 1
+	tres_byte: resb 1
+	reg_copia: resb 8
+	byte_uno: resb 1
+	result: resb 64
+	contenido_archivo: resb 32
+	frecuencia: resb 64
+	
+
+
+;===================================================================================
+
+;===================================================================================
+;Segmento de codigo
+section .text
+    global _start
+;    names	db	'FPU  VME  DE   PSE  TSC  MSR  PAE  MCE  CX8  APIC RESV SEP  MTRR PGE  MCA  CMOV PAT PSE3 PSN  CLFS RESV DS   ACPI MMX FXSR SSE  SSE2 SS   HTT  TM   RESV PBE '
+
+
+
+_free:  	
+		;mov [variable], 0
+		mov r11,0x000000
+		mov [variable], r11
+
+		jmp _start 
+
+_start:
+	jmp _MSJ
+
+	_MSJ:
+	;Primer paso: Imprimir el banner de bienvenida
+	
+		mov rax,1					;rax = "sys_write"
+		mov rdi,1				;rdi = 1 (standard output = pantalla)
+		mov rsi,cons_banner				;rsi = mensaje a imprimir
+		mov rdx,cons_tamano_banner	;rdx=tamano del string
+		syscall	;Llamar al sistema
+		jmp _CAPTURA
+
+	_CAPTURA:
+							
+
+			;Segundo paso: Capturar una tecla presionada en el teclado
+			mov rax,0					;rax = "sys_read"
+			mov rdi,0				;rdi = 0 (standard input teclado)
+			mov rsi,variable	;rsi = direccion de memoria donde se almacena la 				tecla capturada
+			mov rdx,1		;rdx=1 (cuantos eventos o teclazos capturar)
+
+			syscall			;Llamar al sistema
+			mov r12, [variable]
+			jmp _comparacion
+
+	_comparacion:
+		
+			cmp r12, 0x31 ; comparación de 1
+			je _info
+			cmp r12, 0x32
+			je _ram
+			cmp r12, 0x33
+			je _cores
+			cmp r12, 0x34
+			je _cache
+			cmp r12, 0x35
+			je _discoduro
+			cmp r12, 0x36
+			je _frecuencia
+			cmp r12, 0x37
+			je _salida
+			jmp _CAPTURA
+
+	                  
+
+
+
+
+	;------------------------------Inicio de codigo-------------------------------------
+	_info:
+
+		;-------------------------------------------------------------------------------
+		;Primera parte: Identificacion del fabricante
+		mov eax,0 ;Cargando EAX=0: Leer la identificacion del fabricante
+		cpuid     ;Llamada a CPUID
+		;El ID de fabricante se compone de 12 bytes que se almacenan en este orden:
+		;          1) Primeros 4 bytes en EBX
+		;          2) Siguientes 4 bytes en EDX
+		;          3) Ultimos 4 bytes en ECX
+			  mov [fabricante_id],ebx
+			  mov [fabricante_id+4],edx
+			  mov [fabricante_id+8],ecx
+		;Ahora se imprime el ID del fabricante usando la macro impr_linea
+						impr_texto cons_fabricante,cons_tam_fabricante
+			impr_linea fabricante_id,12
+		;-------------------------------------------------------------------------------
+
+		;-------------------------------------------------------------------------------
+		;Segunda parte: Version del procesador
+		;La version del procesador se conforma por:
+		;     * Stepping o numero de revision
+		;     * Model o modelo del procesador
+		;			* Familia del procesador
+		;			* Tipo del procesador
+		;			* Modelo extendido
+		;			* Familia extendido
+		; NOTA: Cada uno de estos valores se lee como un numero y tienen diferente
+		; significado dependiendo del fabricante. En este ejercicio solamente se
+		; recuperan los valores numericos y se muestran al usuario
+		; Para recuperar los valores, se llama CPUID con EAX=1
+		;mov eax,1 ;Cargando EAX=1: Leer informacion y features del CPU
+		;cpuid
+		;Las funcionalidades del procesador se retornan en EAX con este formato:
+		; EAX = 0xHGFEDCBA (Cada letra representa 4 bits)
+		; Donde:
+		;			A = Stepping
+		;			B = Model
+		;			C = Familia
+		;			D = Tipo
+		;			E = Modelo extendido
+		;			F = Familia extendida
+		;			G-H = No se utilizan
+
+
+		;Primero se calcula el stepping (Nibble menos significativo)
+					;Llamar a CPUID con EAX=1 para solicitar los features del CPU
+					mov eax,1
+					cpuid
+					;R8 se usa como referencia con el valor precargado. No debe sobre-escribirse
+					mov r8,rax
+					;Imprimir los encabezados
+					impr_texto cons_stepping,cons_tam_stepping
+					impr_texto cons_hex_header,cons_tam_hex_header
+					;EAX se va a copiar a EDX para poder hacer calculos sin perder los datos de EAX
+					mov edx,eax
+					;Nos interesa el nibble mas bajo de EDX (Stepping) - Se filtra con una mascara
+					and edx,0x000F
+					;Se carga la tabla de referencia para imprimir hexadecimales en EBX
+					lea ebx,[tabla]
+					;Ahora, en AL se carga el nibble que deseamos buscar en la tabla y se hace el lookup
+					mov al,dl
+					xlat
+					;El resultado se guarda en "un_byte"
+					mov [un_byte],ax
+					;Ahora, en un_byte esta el caracter ASCII correspondiente al hexadecimal a imprimir
+					impr_linea un_byte,1
+
+		;Ahora se pasa a calcular el modelo (Segundo nibble menos significativo)
+					;Imprimir los encabezados
+					impr_texto cons_modelo,cons_tam_modelo
+					impr_texto cons_hex_header,cons_tam_hex_header
+					;Se recuperan los valores de CPUID
+					mov rax,r8
+					mov edx,eax
+					;Nos interesa el segundo nibble mas bajo de EDX (Modelo) - Se filtra con una mascara
+					;y con un corrimiento (shift) a la derecha por 4 bits
+					and edx,0x00F0
+					shr edx,4
+					;Se carga la tabla de referencia para imprimir hexadecimales en EBX
+					lea ebx,[tabla]
+					;Ahora, en AL se carga el nibble que deseamos buscar en la tabla y se hace el lookup
+					mov al,dl
+					xlat
+					;El resultado se guarda en "un_byte"
+					mov [un_byte],ax
+					;Ahora, en un_byte esta el caracter ASCII correspondiente al hexadecimal a imprimir
+					impr_linea un_byte,1
+
+		;Ahora se pasa a calcular la Familia (Tercer nibble)
+					;Imprimir los encabezados
+					impr_texto cons_familia,cons_tam_familia
+					impr_texto cons_hex_header,cons_tam_hex_header
+					;Se recuperan los valores de CPUID
+					mov rax,r8
+					mov edx,eax
+					;Nos interesa el tercer nibble mas bajo de EDX (Modelo) - Se filtra con una mascara
+					;y con un corrimiento (shift) a la derecha por 8 bits
+					and edx,0x0F00
+					shr edx,8
+					;Se carga la tabla de referencia para imprimir hexadecimales en EBX
+					lea ebx,[tabla]
+					;Ahora, en AL se carga el nibble que deseamos buscar en la tabla y se hace el lookup
+					mov al,dl
+					xlat
+					;El resultado se guarda en "un_byte"
+					mov [un_byte],ax
+					;Ahora, en un_byte esta el caracter ASCII correspondiente al hexadecimal a imprimir
+					impr_linea un_byte,1
+
+		;Ahora se pasa a calcular el tipo de procesador
+					;Imprimir los encabezados
+					impr_texto cons_tipo_cpu,cons_tam_tipo_cpu
+					impr_texto cons_hex_header,cons_tam_hex_header
+					;Se recuperan los valores de CPUID
+					mov rax,r8
+					mov edx,eax
+					;Nos interesa el cuarto nibble mas bajo de EDX (Tipo) - Se filtra con una mascara
+					;y con un corrimiento (shift) a la derecha por 12 bits
+					and edx,0xF000
+					shr edx,12
+					;Se carga la tabla de referencia para imprimir hexadecimales en EBX
+					lea ebx,[tabla]
+					;Ahora, en AL se carga el nibble que deseamos buscar en la tabla y se hace el lookup
+					mov al,dl
+					xlat
+					;El resultado se guarda en "un_byte"
+					mov [un_byte],ax
+					;Ahora, en un_byte esta el caracter ASCII correspondiente al hexadecimal a imprimir
+					impr_linea un_byte,1
+
+		;Finalmente, se calcula el modelo extendido del procesador
+					;Imprimir los encabezados
+					impr_texto cons_modelo_ext,cons_tam_modelo_ext
+					impr_texto cons_hex_header,cons_tam_hex_header
+					;Se recuperan los valores de CPUID
+					mov rax,r8
+					;Para poder trabajar el 5to nibble, es necesario hacer un corrimiento a RAX
+					;antes de procesarlo con las mascaras en EDX
+					shr rax,4
+					mov edx,eax
+					;Nos interesa el cuarto nibble de EDX (Modelo Ext) - Se filtra con una mascara
+					;y con un corrimiento (shift) a la derecha por 12 bits
+					and edx,0xF000
+					shr edx,12
+					;Se carga la tabla de referencia para imprimir hexadecimales en EBX
+					lea ebx,[tabla]
+					;Ahora, en AL se carga el nibble que deseamos buscar en la tabla y se hace el lookup
+					mov al,dl
+					xlat
+					;El resultado se guarda en "un_byte"
+					mov [un_byte],ax
+					;Ahora, en un_byte esta el caracter ASCII correspondiente al hexadecimal a imprimir
+					impr_linea un_byte,1
+					jmp _free
+
+
+	_ram:
+		;-------------------------------------------------------------------
+		;-----Ahora se quiere imprimir el tamano disponible de memoria RAM--
+
+			nop
+			mov rdi,resultado
+			mov rax,0x63
+			syscall
+
+			impr_texto cons_tamtotal,cons_tam_ram
+
+	
+			mov al,0			;pone a al en 0
+			mov edx,[resultado + 0x24]	;busca el segundo registro de memoria total de ram
+			and edx,0x000F			;hace un and y deja solo los ultimos 4 bits del registro
+			lea ebx,[tabla]			;direcciona los valores de tabla a ebx
+			mov al,dl			;pone en al el valor a buscar en tabla
+			xlat
+			mov [dos_byte],ax			;pone en la direccion de salida el valor del numero ASCII respectivo a esos 4 bits
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x20]	;busca el primer registro de memoria total de ram
+			and edx,0xF0000000		;hace un and y solo deja los 4 bits mas significativos 
+			shr edx,28			;hace un corrimiento de 28 espacios a la derecha
+			mov al,dl			;pone en al el valor a buscar en tabla
+			xlat
+			mov [dos_byte],ax			;pone en la direccion de salida el valor del numero ASCII respectivo a esos 4 bits
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x20]	;busca el primer registro de memoria total de ram
+			and edx,0x0F000000		;hace un and y solo deja los bits entre [28:24]
+			shr edx,24			;hace un corrimiento de 24 espacios a la derecha 
+			mov al,dl			;pone en al el valor a buscar en tabla
+			xlat
+			mov [dos_byte],ax			;pone en la direccion de salida el valor del numero ASCII respectivo a esos 4 bits
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x20]
+			and edx,0x00F00000
+			shr edx,20
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x20]
+			and edx,0x000F0000
+			shr edx,16
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x20]
+			and edx,0x0000F000
+			shr edx,12
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x20]
+			and edx,0x00000F00
+			shr edx,8
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+			 
+			mov edx,[resultado + 0x20]
+			and edx,0x000000F0
+			shr edx,4
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x20]
+			and edx,0x0000000F
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_linea dos_byte,1
+
+
+		;-------------------------------------------------------------------
+		;-----Ahora se quiere imprimir el tamano disponible de memoria RAM--
+
+
+			impr_texto cons_ramdisponible,cons_tam_disponible
+
+	
+			mov al,0			;pone a al en 0
+			mov edx,[resultado + 0x2c]	;busca el segundo registro de memoria total de ram
+			and edx,0x000F			;hace un and y deja solo los ultimos 4 bits del registro
+			lea ebx,[tabla]			;direcciona los valores de tabla a ebx
+			mov al,dl			;pone en al el valor a buscar en tabla
+			xlat
+			mov [dos_byte],ax			;pone en la direccion de salida el valor del numero ASCII respectivo a esos 4 bits
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x28]	;busca el primer registro de memoria total de ram
+			and edx,0xF0000000		;hace un and y solo deja los 4 bits mas significativos 
+			shr edx,28			;hace un corrimiento de 28 espacios a la derecha
+			mov al,dl			;pone en al el valor a buscar en tabla
+			xlat
+			mov [dos_byte],ax			;pone en la direccion de salida el valor del numero ASCII respectivo a esos 4 bits
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x28]	;busca el primer registro de memoria total de ram
+			and edx,0x0F000000		;hace un and y solo deja los bits entre [28:24]
+			shr edx,24			;hace un corrimiento de 24 espacios a la derecha 
+			mov al,dl			;pone en al el valor a buscar en tabla
+			xlat
+			mov [dos_byte],ax			;pone en la direccion de salida el valor del numero ASCII respectivo a esos 4 bits
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x28]
+			and edx,0x00F00000
+			shr edx,20
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x28]
+			and edx,0x000F0000
+			shr edx,16
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x28]
+			and edx,0x0000F000
+			shr edx,12
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x28]
+			and edx,0x00000F00
+			shr edx,8
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+			 
+			mov edx,[resultado + 0x28]
+			and edx,0x000000F0
+			shr edx,4
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+
+			mov edx,[resultado + 0x28]
+			and edx,0x0000000F
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_linea dos_byte,1
+			jmp _free
+
+	_cores:
+		;-------Ahora se quiere imprimir el numero de nucleos---------------
+		
+			impr_texto cons_numnucleos,cons_tam_numnucleos
+
+			mov eax,4
+			mov ecx,0
+			mov ebx,0
+			mov edx,0
+			cpuid
+		
+			mov edx,eax			;busca el segundo registro de memoria total de ram
+			and edx,0xFF000000			;hace un and y deja solo los ultimos 4 bits del registro
+			shr edx,26
+			add edx,0x1
+		
+			lea ebx,[tabla]			;direcciona los valores de tabla a ebx
+			mov al,dl			;pone en al el valor a buscar en tabla
+			xlat
+			mov [tres_byte],ax			;pone en la direccion de salida el valor del numero ASCII respectivo a esos 4 bits
+			impr_linea tres_byte,1
+			jmp _free
+
+		
+	
+		_cache:
+			impr_texto cons_cache, cons_num_cache ;Se imprime el texto MEmoria Cache
+			mov eax,2                             ;Parametro para cache en CPUID
+			cpuid 
+	
+		_datacache:
+
+		;--------Guardar informacion-----
+	
+			mov [reg_copia],eax ;Los datos de eax se guardan en reg_copia
+			mov r9,[reg_copia]  ;Los datos de reg_copiar se guardan en r9
+	
+		_datacachebackup:
+	
+		;---------Ciclo recorrer registro---
+	
+			mov r8,0x4 ;Es el numero de repeticiones en r8
+			mov r10,1  ;Es un contador para numero de dato a consultar
+	
+		loopcache: ;Inicio del ciclo
+		
+		;--------Numero dato-------
+	
+			impr_texto dcache,1    ;Se imprime D
+			impr_hexa r10          ;Se imprime numero de dato
+			impr_texto dospuntos,2 ;Se imprimen :
+	
+		;--Variables y mascaras--
+	
+			mov r12,r9   ;Los datos de la cache se guardan en r12
+			mov r13,r9   ;Tambien se guardan en r13
+			shr r12,4    ;Se mueve 4 veces a la derecha para dividir en bloques de dos bytes
+			and r12,0x0F ;Mascara para r12
+			and r13,0x0F ;Mascara para r13
+		
+		;------Impresion datos------
+	
+			impr_hexa r12         ;Se imprime el primer byte	
+			impr_hexa r13         ;Se imprime el segundo byte
+			impr_texto cons_esp,1 ;Se imprime un espacio para el siguiente ciclo
+	
+		;--Datos ciclo siguiente---
+	
+			add r10,1     ;Se suma 1 al contador
+			shr r9,8      ;Se mueven 2 bytes a la derecha con el fin de preparar el siguiente bloque
+			dec r8        ;Se resta 1 al contador de las repeticiones restantes
+			jnz loopcache ;Salto al ciclo
+			jmp _free
+
+		_discoduro:
+
+		;-------------------------------------------------------------------
+		;-----Ahora se quiere imprimir el tamano disponible del disco duro--
+
+
+			mov ebx, nombre_archivo
+			mov eax, 5
+			mov ecx, 0
+			mov edx, 0
+			int 80h
+			mov eax,3
+			mov ebx,3
+			mov ecx,contenido_archivo
+			mov edx, 200
+			int 80h
+
+
+			impr_texto cons_discoduro,cons_tam_discoduro
+	
+			mov edx,[contenido_archivo + 4]	;busca el segundo registro de memoria total de ram
+			and edx,0x0F000000			;hace un and y deja solo los ultimos 4 bits del registro
+			shr edx, 24
+			mov eax,edx			;pone en la direccion de salida el valor del numero ASCII respectivo a esos 4 bits
+
+			mov edx,[contenido_archivo + 4]
+			and edx,0x000F0000
+			shr edx,12
+			or eax,edx
+
+			mov edx,[contenido_archivo + 4]
+			and edx,0x00000F00
+			or eax,edx
+
+			mov edx,[contenido_archivo + 4]
+			and edx,0x0000000F
+			shl edx,12
+			or eax,edx
+
+			mov edx,[contenido_archivo]
+			and edx,0x0F000000
+			shr edx,8
+			or eax,edx
+
+			mov edx,[contenido_archivo]
+			and edx,0x000F0000
+			shl edx,4
+			or eax,edx
+
+			mov edx,[contenido_archivo]
+			and edx,0x00000F00
+			shl edx,16
+			or eax,edx
+
+			mov edx,[contenido_archivo]
+			and edx,0x0000000F
+			shl edx,28
+			or eax,edx
+
+			mov r8,0x512
+			mov r9,0x1000000000
+			mul r8
+			div r9
+
+
+			mov [result],eax
+	
+			lea ebx,[tabla]	
+			mov edx,[result]
+			and edx,0xF00
+			shr edx,8
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+			 
+			mov edx,[result]
+			and edx,0x0F0
+			shr edx,4
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_texto dos_byte,1
+
+
+			mov edx,[result]
+			and edx,0x00F
+			mov al,dl
+			xlat
+			mov [dos_byte],ax
+			impr_linea dos_byte,1
+
+		_frecuencia:
+
+				;-------------------------------------------------------------------
+		;-----Ahora se quiere imprimir la frecuencia del Procesador---------
+
+			mov rax,0x80000002
+			cpuid
+			mov [frecuencia],eax
+			mov [frecuencia + 4],ebx
+			mov [frecuencia + 8],ecx
+			mov [frecuencia + 12],edx
+
+			mov rax,0x80000003
+			cpuid
+			mov [frecuencia + 16],eax
+			mov [frecuencia + 20],ebx
+			mov [frecuencia + 24],ecx
+			mov [frecuencia + 28],edx
+
+			mov rax,0x80000004
+			cpuid
+			mov [frecuencia + 32],eax
+			mov [frecuencia + 36],ebx
+			mov [frecuencia + 40],ecx
+			mov [frecuencia + 44],edx
+
+		_prueba:
+			impr_texto cons_frecuencia,cons_tam_frecuencia
+			impr_linea frecuencia,64
+			jmp _free
+	
+
+		;-------------------------------------------------------------------
+
+
+		;===================================================================================
+		;Finalizacion del programa. Devolver condiciones para evitar un segmentation fault
+		  mov	eax,1	;(sys_exit)
+			mov	ebx,0	;exit status 0
+			int	0x80	;llamar al sistema
+		;===================================================================================
+
+	
+	
+	
+		
+_salida:
+		;Sexto paso: Salida del programa
+		mov rax,60	;se carga la llamada 60d 			(sys_exit) en rax
+		mov rdi,0	;en rdi se carga 			un 0
+		syscall		;se llama al sistema.
+
+	;fin del programa
+	;##############################################	
